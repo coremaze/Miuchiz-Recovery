@@ -120,7 +120,7 @@ impl MiuchizApp {
                 },
                 MiuchizProcess::Flashing { file, device } =>  {
                     text_tx.send("OK".to_string()).ok();
-                    if let Err(message) = Self::flash(device, file, &progress_tx) {
+                    if let Err(message) = Self::flash(device, file, &progress_tx, &text_tx) {
                         text_tx.send(message).ok();
                     }
                     else {
@@ -142,7 +142,8 @@ impl MiuchizApp {
         }
     }
 
-    fn flash(device: &PathBuf, file: &PathBuf, progress_tx: &Sender<(u32, u32)>) -> Result<(), String> {
+    fn flash(device: &PathBuf, file: &PathBuf, progress_tx: &Sender<(u32, u32)>, text_tx: &Sender<String>) -> Result<(), String> {
+        const MAX_PAGE_TIME: Duration = Duration::from_secs(3);
         let data = if let Ok(data) = fs::read(file) {
             data
         }
@@ -156,13 +157,28 @@ impl MiuchizApp {
 
 
         let set = libmiuchiz_usb::HandheldSet::new();
-        for page in 0..PAGE_NUM {
+
+        let mut page: usize = 0;
+        while page < PAGE_NUM {
             let page_start = page * PAGE_SIZE;
             let page_end = (page+1) * PAGE_SIZE;
             let buf = &data.as_slice()[page_start..page_end].to_vec();
 
+            let now = std::time::Instant::now();
             set.write_page(device, page as u32, buf)?;
+            let elapsed = now.elapsed();
 
+            // rare
+            if elapsed > MAX_PAGE_TIME {
+                let new_page = page.checked_sub(1).or(Some(0)).unwrap();
+                text_tx.send(format!("Page {page} took a long time to write. Restarting from {new_page}.")).ok();
+                page = new_page;
+                thread::sleep(Duration::from_secs(1));
+            }
+            else {
+                page += 1;
+            }
+            
             progress_tx.send((page as u32, PAGE_NUM as u32)).ok();
         }
         
