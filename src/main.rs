@@ -427,20 +427,6 @@ impl eframe::App for MiuchizApp {
 }
 
 fn main() {
-    // let mut miuchiz_set = libmiuchiz_usb::HandheldSet::new();
-    // let num_handhelds = miuchiz_set.num_handhelds;
-    // println!("{num_handhelds} handhelds found");
-
-    // for p in miuchiz_set.get_handheld_paths() {
-    //     let path = p.display();
-    //     println!("{path}");
-    //     miuchiz_set.write_page(p, 1, vec![0x22u8; 0x1000]);
-    //     let data = miuchiz_set.read_page(p, 1).unwrap();
-    //     println!("{:?}", data);
-    // }
-
-
-
     let window_size = Some(Vec2 {x: 800.0, y: 400.0});
     eframe::run_native(
         "Miuchiz USB Utility", 
