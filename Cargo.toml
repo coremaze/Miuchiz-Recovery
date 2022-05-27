@@ -10,8 +10,6 @@ build = "src/build.rs"
 [dependencies]
 eframe = "0.18.0"
 rfd = "0.8"
-libc = "0.2.126"
-
 
 [build-dependencies]
 cc = { version = "1.0", features = ["parallel"] }
