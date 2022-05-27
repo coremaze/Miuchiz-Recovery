@@ -15,7 +15,9 @@ A Miuchiz handheld device must be in "PC mode" to attach to a computer via USB. 
 
 [1]: "Booting the device" does not happen upon pressing the POWER button. This button is only used to put it into a low-power state. Booting the device can be done by pressing RESET, inserting batteries, or plugging it into a USB power source while batteries are not inside the device.
 
+## Installing
 
+Executable binaries can be downloaded from the [Releases](https://github.com/ChrisMiuchiz/Miuchiz-Recovery/releases/) page. If the Rust toolchain is installed, it can be built with `cargo build -r`.
 
 ---
 
