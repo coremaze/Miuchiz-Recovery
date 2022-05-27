@@ -1,3 +1,4 @@
+#![windows_subsystem = "windows"]
 use std::{thread::{self, sleep}, sync::mpsc::{channel, Receiver, Sender}, path::PathBuf, time::Duration, fs};
 
 use eframe::{egui, emath::Vec2};
