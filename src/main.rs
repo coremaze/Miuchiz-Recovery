@@ -255,12 +255,9 @@ impl MiuchizApp {
     }
 
     fn try_set_state(&mut self, process: MiuchizProcess) {
-        match &self.processing_state {
-            MiuchizProcess::WatchingForHandhelds => {
-                self.progress_amount = None;
-                self.process_tx.send(process).ok();
-            }
-            _ => {}
+        if let MiuchizProcess::WatchingForHandhelds = &self.processing_state {
+            self.progress_amount = None;
+            self.process_tx.send(process).ok();
         }
     }
 
