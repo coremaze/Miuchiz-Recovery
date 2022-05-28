@@ -174,7 +174,7 @@ impl MiuchizApp {
         while page < PAGE_NUM {
             let page_start = page * PAGE_SIZE;
             let page_end = (page + 1) * PAGE_SIZE;
-            let buf = &data.as_slice()[page_start..page_end].to_vec();
+            let buf = &data[page_start..page_end];
 
             let now = std::time::Instant::now();
             set.write_page(device, page as u32, buf)?;
