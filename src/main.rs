@@ -213,7 +213,7 @@ impl MiuchizApp {
             progress_tx.send((page as u32, PAGE_NUM as u32)).ok();
         }
 
-        if let Err(_) = fs::write(file, data) {
+        if fs::write(file, data).is_err() {
             return Err("Unable to write to file.".to_string());
         }
 
