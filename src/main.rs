@@ -1,6 +1,7 @@
 #![windows_subsystem = "windows"]
 use std::{
     fs,
+    path::Path,
     path::PathBuf,
     sync::mpsc::{channel, Receiver, Sender},
     thread::{self, sleep},
@@ -149,8 +150,8 @@ impl MiuchizApp {
     }
 
     fn flash(
-        device: &PathBuf,
-        file: &PathBuf,
+        device: &Path,
+        file: &Path,
         progress_tx: &Sender<(u32, u32)>,
         text_tx: &Sender<String>,
     ) -> Result<(), String> {
@@ -201,11 +202,7 @@ impl MiuchizApp {
         Ok(())
     }
 
-    fn dump(
-        device: &PathBuf,
-        file: &PathBuf,
-        progress_tx: &Sender<(u32, u32)>,
-    ) -> Result<(), String> {
+    fn dump(device: &Path, file: &Path, progress_tx: &Sender<(u32, u32)>) -> Result<(), String> {
         let mut data: Vec<u8> = Vec::new();
 
         let set = libmiuchiz_usb::HandheldSet::new();
@@ -351,10 +348,7 @@ impl MiuchizApp {
                 if ui.button("Dump flash").clicked() {
                     if let Some(device) = self.selected_handheld.clone() {
                         if let Some(file) = FileDialog::new().save_file() {
-                            self.try_set_state(MiuchizProcess::Reading {
-                                file,
-                                device: device.to_path_buf(),
-                            });
+                            self.try_set_state(MiuchizProcess::Reading { file, device });
                         }
                     }
                 }
@@ -389,8 +383,8 @@ impl MiuchizApp {
                         self.selected_handheld.clone(),
                     ) {
                         self.try_set_state(MiuchizProcess::Flashing {
-                            file: flash_file.to_path_buf(),
-                            device: device.to_path_buf(),
+                            file: flash_file,
+                            device,
                         });
                     }
                 }
