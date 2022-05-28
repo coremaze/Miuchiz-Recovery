@@ -182,7 +182,7 @@ impl MiuchizApp {
 
             // rare
             if elapsed > MAX_PAGE_TIME {
-                let new_page = page.checked_sub(1).or(Some(0)).unwrap();
+                let new_page = page.saturating_sub(1);
                 text_tx
                     .send(format!(
                         "Page {page} took a long time to write. Restarting from {new_page}."
