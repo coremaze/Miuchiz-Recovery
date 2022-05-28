@@ -2,35 +2,34 @@
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 #![allow(dead_code)]
-use std::{path::Path, ffi::{CStr}};
+use std::{ffi::CStr, path::Path};
 
 include!("./bindings.rs");
 
-
 pub struct HandheldSet {
     raw_handhelds: *mut *mut Handheld,
-    pub num_handhelds: u32
+    pub num_handhelds: u32,
 }
 
 impl HandheldSet {
     pub fn new() -> HandheldSet {
         let mut handheld_set: HandheldSet;
-    
+
         unsafe {
             handheld_set = HandheldSet {
                 raw_handhelds: std::ptr::null_mut() as *mut *mut Handheld,
-                num_handhelds: 0
+                num_handhelds: 0,
             };
-    
+
             let result = miuchiz_handheld_create_all(&mut handheld_set.raw_handhelds);
             if result >= 0 {
                 handheld_set.num_handhelds = result as u32;
             }
         }
-    
+
         handheld_set
     }
-    
+
     pub fn get_handheld_paths(&self) -> Vec<&Path> {
         let mut result: Vec<&Path> = Vec::new();
         result.reserve(self.num_handhelds as usize);
@@ -43,7 +42,7 @@ impl HandheldSet {
                 let path_i8 = (*handheld).device;
                 slice = CStr::from_ptr(path_i8);
             }
-            
+
             if let Ok(str) = std::str::from_utf8(slice.to_bytes()) {
                 let path = Path::new(str);
                 result.push(path);
@@ -53,7 +52,7 @@ impl HandheldSet {
     }
 
     pub fn destroy_all(&mut self) {
-        if self.raw_handhelds != std::ptr::null_mut::<*mut Handheld>() {
+        if !self.raw_handhelds.is_null() {
             unsafe {
                 miuchiz_handheld_destroy_all(self.raw_handhelds);
             }
@@ -82,27 +81,25 @@ impl HandheldSet {
                 }
             }
         }
-        
+
         handheld
     }
 
-    pub fn write_page(&self, path: &Path, page: u32, buf: &Vec<u8>) -> Result<(), String>
-    {
+    pub fn write_page(&self, path: &Path, page: u32, buf: &Vec<u8>) -> Result<(), String> {
         if let Some(raw_handheld) = self.get_handheld_by_path(path) {
             unsafe {
                 let result = miuchiz_handheld_write_page(
-                    raw_handheld, 
-                    page as i32, 
-                    buf.as_ptr() as *const ::std::os::raw::c_void, 
-                    buf.len() as size_t
+                    raw_handheld,
+                    page as i32,
+                    buf.as_ptr() as *const ::std::os::raw::c_void,
+                    buf.len() as size_t,
                 );
                 if result < 0 {
-                    return Err("Error writing page".to_string())
+                    return Err("Error writing page".to_string());
                 }
             }
             Ok(())
-        }
-        else {
+        } else {
             Err("Could not find handheld".to_string())
         }
     }
@@ -112,18 +109,17 @@ impl HandheldSet {
         if let Some(raw_handheld) = self.get_handheld_by_path(path) {
             unsafe {
                 let result = miuchiz_handheld_read_page(
-                    raw_handheld, 
+                    raw_handheld,
                     page as i32,
                     result.as_ptr() as *mut ::std::os::raw::c_void,
-                    result.len() as size_t
+                    result.len() as size_t,
                 );
                 if result < 0 {
-                    return Err("Error reading page".to_string())
+                    return Err("Error reading page".to_string());
                 }
             }
             Ok(result)
-        }
-        else {
+        } else {
             Err("Could not find handheld".to_string())
         }
     }
@@ -138,5 +134,3 @@ impl Drop for HandheldSet {
         self.destroy_all();
     }
 }
-
-

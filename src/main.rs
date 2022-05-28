@@ -1,5 +1,12 @@
 #![windows_subsystem = "windows"]
-use std::{thread::{self, sleep}, sync::mpsc::{channel, Receiver, Sender}, path::PathBuf, time::Duration, fs};
+use std::{
+    fs,
+    path::Path,
+    path::PathBuf,
+    sync::mpsc::{channel, Receiver, Sender},
+    thread::{self, sleep},
+    time::Duration,
+};
 
 use eframe::{egui, emath::Vec2};
 use rfd::FileDialog;
@@ -23,13 +30,13 @@ struct MiuchizApp {
     text_rx: Receiver<String>,
     text: String,
     processing_state: MiuchizProcess,
-    progress_amount: Option<(u32, u32)>
+    progress_amount: Option<(u32, u32)>,
 }
 #[derive(Clone, Debug)]
 enum MiuchizProcess {
     WatchingForHandhelds,
-    Flashing {file: PathBuf, device: PathBuf},
-    Reading {file: PathBuf, device: PathBuf}
+    Flashing { file: PathBuf, device: PathBuf },
+    Reading { file: PathBuf, device: PathBuf },
 }
 
 impl Default for MiuchizProcess {
@@ -41,7 +48,7 @@ impl Default for MiuchizProcess {
 #[derive(PartialEq)]
 enum MiuchizAppTab {
     DumpView,
-    FlashView
+    FlashView,
 }
 
 impl Default for MiuchizAppTab {
@@ -62,7 +69,7 @@ impl MiuchizApp {
             Self::process(list_tx, process_rx, process_tx2, progress_tx, text_tx);
         });
 
-        Self { 
+        Self {
             app_tab: MiuchizAppTab::default(),
             list_rx,
             handheld_list: Vec::new(),
@@ -74,27 +81,26 @@ impl MiuchizApp {
             text_rx,
             text: "OK".to_string(),
             processing_state: MiuchizProcess::default(),
-            progress_amount: None
+            progress_amount: None,
         }
     }
 
     fn process(
-        list_tx: Sender<Vec<PathBuf>>, 
-        process_rx: Receiver<MiuchizProcess>, 
+        list_tx: Sender<Vec<PathBuf>>,
+        process_rx: Receiver<MiuchizProcess>,
         process_tx: Sender<MiuchizProcess>,
         progress_tx: Sender<(u32, u32)>,
-        text_tx: Sender<String>
-        ) {
+        text_tx: Sender<String>,
+    ) {
         let mut state = MiuchizProcess::default();
 
         loop {
-            match process_rx.try_recv() {
-                Ok(new_state) => state = new_state,
-                Err(_) => {},
+            if let Ok(new_state) = process_rx.try_recv() {
+                state = new_state
             }
 
             match process_tx.send(state.clone()) {
-                Ok(_) => {},
+                Ok(_) => {}
                 Err(_) => break,
             }
 
@@ -106,63 +112,68 @@ impl MiuchizApp {
                         let set = libmiuchiz_usb::HandheldSet::new();
                         let paths = set.get_handheld_paths();
                         new_paths.reserve(paths.len());
-        
+
                         for p in paths {
                             new_paths.push(p.to_path_buf());
                         }
                     }
-        
+
                     match list_tx.send(new_paths) {
-                        Ok(_) => {},
+                        Ok(_) => {}
                         Err(_) => break,
                     }
-        
+
                     sleep(Duration::from_millis(250));
-                },
-                MiuchizProcess::Flashing { file, device } =>  {
+                }
+                MiuchizProcess::Flashing { file, device } => {
                     text_tx.send("OK".to_string()).ok();
                     if let Err(message) = Self::flash(device, file, &progress_tx, &text_tx) {
                         text_tx.send(message).ok();
+                    } else {
+                        text_tx
+                            .send("Finished writing to handheld.".to_string())
+                            .ok();
                     }
-                    else {
-                        text_tx.send("Finished writing to handheld.".to_string()).ok();
-                    }
-                },
-                MiuchizProcess::Reading { file, device } =>  {
+                }
+                MiuchizProcess::Reading { file, device } => {
                     text_tx.send("OK".to_string()).ok();
                     if let Err(message) = Self::dump(device, file, &progress_tx) {
                         text_tx.send(message).ok();
-                    }
-                    else {
+                    } else {
                         text_tx.send("Finished reading handheld.".to_string()).ok();
                     }
-                },
+                }
             }
 
             state = MiuchizProcess::WatchingForHandhelds;
         }
     }
 
-    fn flash(device: &PathBuf, file: &PathBuf, progress_tx: &Sender<(u32, u32)>, text_tx: &Sender<String>) -> Result<(), String> {
+    fn flash(
+        device: &Path,
+        file: &Path,
+        progress_tx: &Sender<(u32, u32)>,
+        text_tx: &Sender<String>,
+    ) -> Result<(), String> {
         const MAX_PAGE_TIME: Duration = Duration::from_secs(3);
         let data = if let Ok(data) = fs::read(file) {
             data
-        }
-        else {
+        } else {
             return Err("Unable to read file.".to_string());
         };
 
         if data.len() != FLASH_FILE_SIZE {
-            return Err(format!("Flash file is not the correct size ({FLASH_FILE_SIZE})."));
+            return Err(format!(
+                "Flash file is not the correct size ({FLASH_FILE_SIZE})."
+            ));
         }
-
 
         let set = libmiuchiz_usb::HandheldSet::new();
 
         let mut page: usize = 0;
         while page < PAGE_NUM {
             let page_start = page * PAGE_SIZE;
-            let page_end = (page+1) * PAGE_SIZE;
+            let page_end = (page + 1) * PAGE_SIZE;
             let buf = &data.as_slice()[page_start..page_end].to_vec();
 
             let now = std::time::Instant::now();
@@ -171,25 +182,27 @@ impl MiuchizApp {
 
             // rare
             if elapsed > MAX_PAGE_TIME {
-                let new_page = page.checked_sub(1).or(Some(0)).unwrap();
-                text_tx.send(format!("Page {page} took a long time to write. Restarting from {new_page}.")).ok();
+                let new_page = page.saturating_sub(1);
+                text_tx
+                    .send(format!(
+                        "Page {page} took a long time to write. Restarting from {new_page}."
+                    ))
+                    .ok();
                 page = new_page;
                 thread::sleep(Duration::from_secs(1));
-            }
-            else {
+            } else {
                 page += 1;
             }
-            
+
             progress_tx.send((page as u32, PAGE_NUM as u32)).ok();
         }
-        
+
         set.eject(device);
 
         Ok(())
-
     }
 
-    fn dump(device: &PathBuf, file: &PathBuf, progress_tx: &Sender<(u32, u32)>) -> Result<(), String> {
+    fn dump(device: &Path, file: &Path, progress_tx: &Sender<(u32, u32)>) -> Result<(), String> {
         let mut data: Vec<u8> = Vec::new();
 
         let set = libmiuchiz_usb::HandheldSet::new();
@@ -200,21 +213,19 @@ impl MiuchizApp {
             progress_tx.send((page as u32, PAGE_NUM as u32)).ok();
         }
 
-        if let Err(_) = fs::write(file, data) {
+        if fs::write(file, data).is_err() {
             return Err("Unable to write to file.".to_string());
         }
 
         Ok(())
-
     }
 
     fn update_messages(&mut self) {
         // update handheld list
-        match self.list_rx.try_recv() {
-            Ok(message) => self.handheld_list = message,
-            Err(_) => {},
+        if let Ok(message) = self.list_rx.try_recv() {
+            self.handheld_list = message
         }
-        
+
         // Make sure selected handheld is still present
         if let Some(selected_handheld) = &self.selected_handheld {
             let mut selected_handheld_still_valid: bool = false;
@@ -230,25 +241,17 @@ impl MiuchizApp {
             }
         }
 
-        match self.process_rx.try_recv() {
-            Ok(state) => self.processing_state = state,
-            Err(_) => {},
+        if let Ok(state) = self.process_rx.try_recv() {
+            self.processing_state = state
         }
 
-        match self.progress_rx.try_recv() {
-            Ok(progress) => {
-                self.progress_amount = Some(progress);
-            },
-            Err(_) => {}
+        if let Ok(progress) = self.progress_rx.try_recv() {
+            self.progress_amount = Some(progress);
         }
 
-        match self.text_rx.try_recv() {
-            Ok(text) => {
-                self.text = text;
-            },
-            Err(_) => {}
+        if let Ok(text) = self.text_rx.try_recv() {
+            self.text = text;
         }
-
     }
 
     fn try_set_state(&mut self, process: MiuchizProcess) {
@@ -256,8 +259,8 @@ impl MiuchizApp {
             MiuchizProcess::WatchingForHandhelds => {
                 self.progress_amount = None;
                 self.process_tx.send(process).ok();
-            },
-            _ => {},
+            }
+            _ => {}
         }
     }
 
@@ -267,19 +270,10 @@ impl MiuchizApp {
             .show_inside(ui, |ui| {
                 ui.horizontal(|ui| {
                     ui.heading("Tasks");
-                    ui.selectable_value(
-                        &mut self.app_tab,
-                        MiuchizAppTab::DumpView,
-                        "Dump" 
-                    );
-                    ui.selectable_value(
-                        &mut self.app_tab,
-                        MiuchizAppTab::FlashView,
-                        "Flash" 
-                    );
+                    ui.selectable_value(&mut self.app_tab, MiuchizAppTab::DumpView, "Dump");
+                    ui.selectable_value(&mut self.app_tab, MiuchizAppTab::FlashView, "Flash");
                 });
-            }
-        );
+            });
     }
 
     fn handhelds_panel(&mut self, ui: &mut egui::Ui) {
@@ -289,16 +283,17 @@ impl MiuchizApp {
             .show_inside(ui, |ui| {
                 ui.heading("Connected handhelds");
                 ui.separator();
-                egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
-                    for p in &self.handheld_list {
-                        let btn_response = ui.button(p.display().to_string());
-                        if btn_response.clicked() {
-                            self.selected_handheld = Some(p.to_path_buf());
+                egui::ScrollArea::vertical()
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        for p in &self.handheld_list {
+                            let btn_response = ui.button(p.display().to_string());
+                            if btn_response.clicked() {
+                                self.selected_handheld = Some(p.to_path_buf());
+                            }
                         }
-                    }
-                });
-            }
-        );
+                    });
+            });
     }
 
     fn info_panel(&mut self, ui: &mut egui::Ui) {
@@ -308,15 +303,13 @@ impl MiuchizApp {
                 ui.horizontal_centered(|ui| {
                     ui.label(format!("Status: {}", &self.text));
                 });
-            }
-        );
+            });
     }
 
     fn progress(&mut self, ui: &mut egui::Ui) {
         let (current_progress, max_progress) = if let Some(progress) = self.progress_amount {
             (progress.0, progress.1)
-        }
-        else {
+        } else {
             (0, 0)
         };
 
@@ -338,15 +331,14 @@ impl MiuchizApp {
     }
 
     fn selected_handheld_label(&self, ui: &mut egui::Ui) {
-        ui.label(format!("Selected handheld: "));
+        ui.label("Selected handheld: ".to_string());
         if let Some(selected_handheld) = &self.selected_handheld {
             ui.colored_label(FILE_COLOR, selected_handheld.display().to_string());
-        }
-        else {
+        } else {
             ui.colored_label(egui::Color32::RED, "None");
         }
     }
-    
+
     fn dump_view(&mut self, ui: &mut egui::Ui) {
         egui::CentralPanel::default().show_inside(ui, |ui| {
             ui.vertical_centered_justified(|ui| {
@@ -356,12 +348,7 @@ impl MiuchizApp {
                 if ui.button("Dump flash").clicked() {
                     if let Some(device) = self.selected_handheld.clone() {
                         if let Some(file) = FileDialog::new().save_file() {
-                            self.try_set_state(
-                                MiuchizProcess::Reading { 
-                                    file, 
-                                    device: device.to_path_buf() 
-                                }
-                            );
+                            self.try_set_state(MiuchizProcess::Reading { file, device });
                         }
                     }
                 }
@@ -378,11 +365,10 @@ impl MiuchizApp {
                     self.selected_handheld_label(ui);
                 });
                 ui.horizontal(|ui| {
-                    ui.label(format!("Selected flash file: "));
+                    ui.label("Selected flash file: ".to_string());
                     if let Some(flash_file) = &self.selected_load_file {
                         ui.colored_label(FILE_COLOR, flash_file.display().to_string());
-                    }
-                    else {
+                    } else {
                         ui.colored_label(egui::Color32::RED, "None");
                     }
                 });
@@ -392,13 +378,14 @@ impl MiuchizApp {
                     }
                 }
                 if ui.button("Load flash").clicked() {
-                    if let (Some(flash_file), Some(device)) = (self.selected_load_file.clone(), self.selected_handheld.clone()) {
-                        self.try_set_state(
-                            MiuchizProcess::Flashing { 
-                                file: flash_file.to_path_buf(), 
-                                device: device.to_path_buf() 
-                            }
-                        );
+                    if let (Some(flash_file), Some(device)) = (
+                        self.selected_load_file.clone(),
+                        self.selected_handheld.clone(),
+                    ) {
+                        self.try_set_state(MiuchizProcess::Flashing {
+                            file: flash_file,
+                            device,
+                        });
                     }
                 }
                 ui.separator();
@@ -416,21 +403,19 @@ impl eframe::App for MiuchizApp {
             self.tabs(ui);
             self.handhelds_panel(ui);
             self.info_panel(ui);
-            
+
             match self.app_tab {
                 MiuchizAppTab::DumpView => self.dump_view(ui),
-                MiuchizAppTab::FlashView => self.flash_view(ui)
+                MiuchizAppTab::FlashView => self.flash_view(ui),
             }
         });
     }
-
-
 }
 
 fn main() {
-    let window_size = Some(Vec2 {x: 800.0, y: 400.0});
+    let window_size = Some(Vec2 { x: 800.0, y: 400.0 });
     eframe::run_native(
-        "Miuchiz USB Utility", 
+        "Miuchiz USB Utility",
         eframe::NativeOptions {
             drag_and_drop_support: true,
             //icon_data: todo!(),
@@ -440,7 +425,6 @@ fn main() {
             resizable: false,
             ..eframe::NativeOptions::default()
         },
-        Box::new(|_cc| {
-            Box::new(MiuchizApp::new())
-        }))
+        Box::new(|_cc| Box::new(MiuchizApp::new())),
+    )
 }
