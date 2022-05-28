@@ -85,7 +85,7 @@ impl HandheldSet {
         handheld
     }
 
-    pub fn write_page(&self, path: &Path, page: u32, buf: &Vec<u8>) -> Result<(), String> {
+    pub fn write_page(&self, path: &Path, page: u32, buf: &[u8]) -> Result<(), String> {
         if let Some(raw_handheld) = self.get_handheld_by_path(path) {
             unsafe {
                 let result = miuchiz_handheld_write_page(
