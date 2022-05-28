@@ -331,7 +331,7 @@ impl MiuchizApp {
     }
 
     fn selected_handheld_label(&self, ui: &mut egui::Ui) {
-        ui.label(format!("Selected handheld: "));
+        ui.label("Selected handheld: ".to_string());
         if let Some(selected_handheld) = &self.selected_handheld {
             ui.colored_label(FILE_COLOR, selected_handheld.display().to_string());
         } else {
@@ -365,7 +365,7 @@ impl MiuchizApp {
                     self.selected_handheld_label(ui);
                 });
                 ui.horizontal(|ui| {
-                    ui.label(format!("Selected flash file: "));
+                    ui.label("Selected flash file: ".to_string());
                     if let Some(flash_file) = &self.selected_load_file {
                         ui.colored_label(FILE_COLOR, flash_file.display().to_string());
                     } else {
