@@ -52,7 +52,7 @@ impl HandheldSet {
     }
 
     pub fn destroy_all(&mut self) {
-        if self.raw_handhelds != std::ptr::null_mut::<*mut Handheld>() {
+        if !self.raw_handhelds.is_null() {
             unsafe {
                 miuchiz_handheld_destroy_all(self.raw_handhelds);
             }
