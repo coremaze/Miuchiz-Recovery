@@ -94,9 +94,8 @@ impl MiuchizApp {
         let mut state = MiuchizProcess::default();
 
         loop {
-            match process_rx.try_recv() {
-                Ok(new_state) => state = new_state,
-                Err(_) => {}
+            if let Ok(new_state) = process_rx.try_recv() {
+                state = new_state
             }
 
             match process_tx.send(state.clone()) {
@@ -226,9 +225,8 @@ impl MiuchizApp {
 
     fn update_messages(&mut self) {
         // update handheld list
-        match self.list_rx.try_recv() {
-            Ok(message) => self.handheld_list = message,
-            Err(_) => {}
+        if let Ok(message) = self.list_rx.try_recv() {
+            self.handheld_list = message
         }
 
         // Make sure selected handheld is still present
@@ -246,23 +244,16 @@ impl MiuchizApp {
             }
         }
 
-        match self.process_rx.try_recv() {
-            Ok(state) => self.processing_state = state,
-            Err(_) => {}
+        if let Ok(state) = self.process_rx.try_recv() {
+            self.processing_state = state
         }
 
-        match self.progress_rx.try_recv() {
-            Ok(progress) => {
-                self.progress_amount = Some(progress);
-            }
-            Err(_) => {}
+        if let Ok(progress) = self.progress_rx.try_recv() {
+            self.progress_amount = Some(progress);
         }
 
-        match self.text_rx.try_recv() {
-            Ok(text) => {
-                self.text = text;
-            }
-            Err(_) => {}
+        if let Ok(text) = self.text_rx.try_recv() {
+            self.text = text;
         }
     }
 
